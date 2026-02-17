@@ -1,24 +1,47 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use crate::config::WatchProfile;
+use crate::pattern_builder::generate_regex_from_line;
+use regex::Regex;
+use std::sync::mpsc;
+use std::thread;
+use linemux::MuxedLines;
 
 pub enum CurrentScreen {
     FilePicker,
     LogTrainer, 
+    LiveMonitor,
+    PatternBuilder,
     Exiting,
 }
 
 pub struct App {
     pub current_screen: CurrentScreen,
     
-    // STATE
+    // File browser state
     pub current_dir: PathBuf,
-    pub files: Vec<PathBuf>, // List of files in current dir
-    pub selected_file_index: usize, // Which file is highlighted
+    pub files: Vec<PathBuf>,
+    pub selected_file_index: usize,
 
-    pub selected_log_path: Option<PathBuf>, // The final choice
+    // Log viewer state
+    pub selected_log_path: Option<PathBuf>,
     pub log_lines: Vec<String>,
     pub selected_log_index: usize,
+
+    // Live monitor state
+    pub live_lines: Vec<String>,
+    pub matched_lines: Vec<(String, String)>, // (line, pattern_name)
+    pub watch_profile: Option<WatchProfile>,
+    pub compiled_patterns: Vec<(String, Regex)>, // (name, regex)
+    
+    // Pattern builder state
+    pub current_pattern: String,
+    pub pattern_name: String,
+    pub test_matches: Vec<String>,
+    
+    // Communication channel for live updates
+    pub line_receiver: Option<mpsc::Receiver<String>>,
 }
 
 impl App {
@@ -33,6 +56,17 @@ impl App {
             selected_log_path: None,
             log_lines: Vec::new(),
             selected_log_index: 0,
+
+            live_lines: Vec::new(),
+            matched_lines: Vec::new(),
+            watch_profile: None,
+            compiled_patterns: Vec::new(),
+            
+            current_pattern: String::new(),
+            pattern_name: String::new(),
+            test_matches: Vec::new(),
+            
+            line_receiver: None,
         };
         app.refresh_files();
         app
@@ -137,4 +171,134 @@ impl App {
         }
     }
 
+    // Start live monitoring of the selected log file
+    pub fn start_live_monitoring(&mut self) {
+        if let Some(path) = &self.selected_log_path {
+            let path = path.clone();
+            let (tx, rx) = mpsc::channel();
+            
+            // Spawn background thread for file monitoring
+            thread::spawn(move || {
+                let mut lines = MuxedLines::new().expect("Failed to create muxed lines");
+                lines.add_file(&path).expect("Failed to add file to watcher");
+                
+                loop {
+                    match lines.next_line() {
+                        Ok(Some(line)) => {
+                            if tx.send(line.line().to_string()).is_err() {
+                                break; // Channel closed
+                            }
+                        }
+                        Ok(None) => {
+                            // No more lines, continue monitoring
+                            std::thread::sleep(std::time::Duration::from_millis(100));
+                        }
+                        Err(_) => break, // Error occurred
+                    }
+                }
+            });
+            
+            self.line_receiver = Some(rx);
+            self.current_screen = CurrentScreen::LiveMonitor;
+        }
+    }
+
+    // Process incoming lines from live monitoring
+    pub fn process_live_updates(&mut self) {
+        if let Some(rx) = &self.line_receiver {
+            while let Ok(line) = rx.try_recv() {
+                self.live_lines.push(line.clone());
+                
+                // Check line against all compiled patterns
+                for (pattern_name, regex) in &self.compiled_patterns {
+                    if regex.is_match(&line) {
+                        self.matched_lines.push((line.clone(), pattern_name.clone()));
+                        // TODO: Send desktop notification
+                    }
+                }
+                
+                // Keep only last 1000 lines for performance
+                if self.live_lines.len() > 1000 {
+                    self.live_lines.remove(0);
+                }
+            }
+        }
+    }
+
+    // Create pattern from currently selected log line
+    pub fn create_pattern_from_line(&mut self) {
+        if !self.log_lines.is_empty() {
+            let selected_line = &self.log_lines[self.selected_log_index];
+            self.current_pattern = generate_regex_from_line(selected_line);
+            self.pattern_name = "New Pattern".to_string();
+            self.test_pattern();
+            self.current_screen = CurrentScreen::PatternBuilder;
+        }
+    }
+
+    // Test current pattern against log lines
+    pub fn test_pattern(&mut self) {
+        self.test_matches.clear();
+        if !self.current_pattern.is_empty() {
+            if let Ok(regex) = Regex::new(&self.current_pattern) {
+                for line in &self.log_lines {
+                    if regex.is_match(line) {
+                        self.test_matches.push(line.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Save current pattern to watch profile
+    pub fn save_pattern(&mut self) {
+        if self.watch_profile.is_none() {
+            let profile_name = self.selected_log_path
+                .as_ref()
+                .and_then(|p| p.file_stem())
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "default".to_string());
+                
+            self.watch_profile = Some(WatchProfile {
+                name: profile_name,
+                file_path: self.selected_log_path.as_ref().unwrap().to_string_lossy().to_string(),
+                error_patterns: Vec::new(),
+            });
+        }
+
+        if let Some(profile) = &mut self.watch_profile {
+            profile.error_patterns.push(format!("{}:{}", self.pattern_name, self.current_pattern));
+            
+            // Recompile patterns
+            self.compile_patterns();
+            
+            // Save to file
+            let filename = format!("{}.json", profile.name);
+            if let Err(e) = profile.save(&filename) {
+                eprintln!("Failed to save profile: {}", e);
+            }
+        }
+    }
+
+    // Compile all patterns in the watch profile
+    pub fn compile_patterns(&mut self) {
+        self.compiled_patterns.clear();
+        if let Some(profile) = &self.watch_profile {
+            for pattern_str in &profile.error_patterns {
+                if let Some((name, pattern)) = pattern_str.split_once(':') {
+                    if let Ok(regex) = Regex::new(pattern) {
+                        self.compiled_patterns.push((name.to_string(), regex));
+                    }
+                }
+            }
+        }
+    }
+
+    // Load existing watch profile
+    pub fn load_watch_profile(&mut self, filename: &str) {
+        if let Ok(profile) = WatchProfile::load(filename) {
+            self.watch_profile = Some(profile);
+            self.compile_patterns();
+        }
+    }
 }

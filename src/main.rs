@@ -4,9 +4,9 @@ mod app;
 
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Alignment},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
     Terminal,
 };
 use crossterm::{
@@ -71,12 +71,90 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state.select(Some(app.selected_log_index));
                     f.render_stateful_widget(log_list, chunks[0], &mut state);
                 }
+                CurrentScreen::LiveMonitor => {
+                    // Process any pending live updates
+                    app.process_live_updates();
+                    
+                    // Split screen: live lines on top, matched patterns on bottom
+                    let monitor_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                        .split(chunks[0]);
+
+                    // Live log lines
+                    let live_items: Vec<ListItem> = app.live_lines.iter().rev().take(50).map(|line| {
+                        ListItem::new(line.as_str())
+                    }).collect();
+
+                    let live_list = List::new(live_items)
+                        .block(Block::default()
+                            .borders(Borders::ALL)
+                            .title(format!(" Live Monitor: {:?} ", 
+                                app.selected_log_path.as_ref().unwrap().file_name().unwrap()))
+                        );
+                    f.render_widget(live_list, monitor_chunks[0]);
+
+                    // Matched patterns
+                    let matched_items: Vec<ListItem> = app.matched_lines.iter().rev().take(20).map(|(line, pattern)| {
+                        ListItem::new(format!("[{}] {}", pattern, line))
+                            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                    }).collect();
+
+                    let matched_list = List::new(matched_items)
+                        .block(Block::default()
+                            .borders(Borders::ALL)
+                            .title(format!(" Pattern Matches ({}) ", app.matched_lines.len()))
+                        );
+                    f.render_widget(matched_list, monitor_chunks[1]);
+                }
+                CurrentScreen::PatternBuilder => {
+                    let pattern_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([
+                            Constraint::Length(3),
+                            Constraint::Length(3), 
+                            Constraint::Min(0)
+                        ])
+                        .split(chunks[0]);
+
+                    // Pattern name input
+                    let name_paragraph = Paragraph::new(format!("Pattern Name: {}", app.pattern_name))
+                        .block(Block::default().borders(Borders::ALL).title(" Pattern Name "));
+                    f.render_widget(name_paragraph, pattern_chunks[0]);
+
+                    // Pattern regex input
+                    let pattern_paragraph = Paragraph::new(app.current_pattern.as_str())
+                        .block(Block::default().borders(Borders::ALL).title(" Regex Pattern "))
+                        .wrap(Wrap { trim: false });
+                    f.render_widget(pattern_paragraph, pattern_chunks[1]);
+
+                    // Test matches
+                    let test_items: Vec<ListItem> = app.test_matches.iter().map(|line| {
+                        ListItem::new(line.as_str())
+                            .style(Style::default().fg(Color::Green))
+                    }).collect();
+
+                    let test_list = List::new(test_items)
+                        .block(Block::default()
+                            .borders(Borders::ALL)
+                            .title(format!(" Test Matches ({}) ", app.test_matches.len()))
+                        );
+                    f.render_widget(test_list, pattern_chunks[2]);
+                }
                 CurrentScreen::Exiting => {}
             }
             
             // Draw Footer (Instructions)
-            let footer = ratatui::widgets::Paragraph::new("Use ↑/↓ to navigate, ENTER to select, q to quit")
-                .style(Style::default().fg(Color::Gray));
+            let footer_text = match app.current_screen {
+                CurrentScreen::FilePicker => "↑/↓ navigate, ENTER select, q quit",
+                CurrentScreen::LogTrainer => "↑/↓ navigate, ENTER create pattern, l live monitor, q back, ESC back",
+                CurrentScreen::LiveMonitor => "q back to file picker, ESC back",
+                CurrentScreen::PatternBuilder => "s save pattern, t test pattern, q back, ESC back",
+                CurrentScreen::Exiting => "",
+            };
+            let footer = Paragraph::new(footer_text)
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center);
             f.render_widget(footer, chunks[1]);
 
         })?;
@@ -101,12 +179,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         match key.code {
                             KeyCode::Up => app.previous_log_line(),
                             KeyCode::Down => app.next_log_line(),
+                            KeyCode::Enter => app.create_pattern_from_line(),
+                            KeyCode::Char('l') => app.start_live_monitoring(),
                             KeyCode::Char('q') => {
-                                // Go BACK to file picker instead of quitting app
                                 app.current_screen = CurrentScreen::FilePicker;
                             },
                             KeyCode::Esc => {
                                 app.current_screen = CurrentScreen::FilePicker;
+                            }
+                            _ => {}
+                        }
+                    }
+                    CurrentScreen::LiveMonitor => {
+                        match key.code {
+                            KeyCode::Char('q') => {
+                                app.current_screen = CurrentScreen::FilePicker;
+                            },
+                            KeyCode::Esc => {
+                                app.current_screen = CurrentScreen::LogTrainer;
+                            }
+                            _ => {}
+                        }
+                    }
+                    CurrentScreen::PatternBuilder => {
+                        match key.code {
+                            KeyCode::Char('s') => {
+                                app.save_pattern();
+                                app.current_screen = CurrentScreen::LogTrainer;
+                            },
+                            KeyCode::Char('t') => {
+                                app.test_pattern();
+                            },
+                            KeyCode::Char('q') => {
+                                app.current_screen = CurrentScreen::FilePicker;
+                            },
+                            KeyCode::Esc => {
+                                app.current_screen = CurrentScreen::LogTrainer;
                             }
                             _ => {}
                         }
