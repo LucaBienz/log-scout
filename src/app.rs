@@ -1,11 +1,10 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::io::{BufRead, BufReader};
+use std::path::{PathBuf};
 use crate::config::WatchProfile;
 use crate::pattern_builder::generate_regex_from_line;
 use regex::Regex;
 use std::sync::mpsc;
-use std::thread;
 use linemux::MuxedLines;
 
 pub enum CurrentScreen {
@@ -69,7 +68,27 @@ impl App {
             line_receiver: None,
         };
         app.refresh_files();
+        app.try_auto_start();
         app
+    }
+
+    fn try_auto_start(&mut self) {
+        if let Ok(entries) = fs::read_dir(".") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().map_or(false, |ext| ext == "json") {
+                    if let Ok(profile) = WatchProfile::load(path.to_str().unwrap_or_default()) {
+                        self.watch_profile = Some(profile);
+                        if let Some(profile) = &self.watch_profile {
+                            self.selected_log_path = Some(PathBuf::from(&profile.file_path));
+                        }
+                        self.compile_patterns();
+                        self.start_live_monitoring();
+                        return;
+                    }
+                }
+            }
+        }
     }
 
     // Reads the current directory and populates 'self.files'
@@ -178,12 +197,12 @@ impl App {
             let (tx, rx) = mpsc::channel();
             
             // Spawn background thread for file monitoring
-            thread::spawn(move || {
+            tokio::spawn(async move {
                 let mut lines = MuxedLines::new().expect("Failed to create muxed lines");
-                lines.add_file(&path).expect("Failed to add file to watcher");
+                lines.add_file(&path).await.expect("Failed to add file to watcher");
                 
                 loop {
-                    match lines.next_line() {
+                    match lines.next_line().await {
                         Ok(Some(line)) => {
                             if tx.send(line.line().to_string()).is_err() {
                                 break; // Channel closed
@@ -191,7 +210,7 @@ impl App {
                         }
                         Ok(None) => {
                             // No more lines, continue monitoring
-                            std::thread::sleep(std::time::Duration::from_millis(100));
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
                         Err(_) => break, // Error occurred
                     }
@@ -268,11 +287,11 @@ impl App {
 
         if let Some(profile) = &mut self.watch_profile {
             profile.error_patterns.push(format!("{}:{}", self.pattern_name, self.current_pattern));
-            
-            // Recompile patterns
-            self.compile_patterns();
-            
-            // Save to file
+        } 
+
+        self.compile_patterns();
+        
+        if let Some(profile) = &self.watch_profile {
             let filename = format!("{}.json", profile.name);
             if let Err(e) = profile.save(&filename) {
                 eprintln!("Failed to save profile: {}", e);
@@ -294,11 +313,4 @@ impl App {
         }
     }
 
-    // Load existing watch profile
-    pub fn load_watch_profile(&mut self, filename: &str) {
-        if let Ok(profile) = WatchProfile::load(filename) {
-            self.watch_profile = Some(profile);
-            self.compile_patterns();
-        }
-    }
 }

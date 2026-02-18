@@ -17,7 +17,8 @@ use crossterm::{
 use std::io;
 use app::{App, CurrentScreen};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup Terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

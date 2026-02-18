@@ -1,0 +1,7 @@
+{
+  "name": "app",
+  "file_path": "C:\\Users\\Luca.LAPTOP-TKB95UDR\\dev\\easipos\\WebBOH\\webboh\\logs\\app.log",
+  "error_patterns": [
+    "New Pattern:\\d+\\-\\d+\\-\\d+ \\d{\\d+}:\\d{\\d+}:\\d{\\d+} ERROR \\[\\d+\\] 💥 Unhandled exception on GET /hardware/HardwarePOS.*"
+  ]
+}
