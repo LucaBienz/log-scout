@@ -6,6 +6,7 @@ use crate::pattern_builder::generate_regex_from_line;
 use regex::Regex;
 use std::sync::mpsc;
 use linemux::MuxedLines;
+use notify_rust::Notification;
 
 pub enum CurrentScreen {
     FilePicker,
@@ -236,7 +237,12 @@ impl App {
                 for (pattern_name, regex) in &self.compiled_patterns {
                     if regex.is_match(&line) {
                         self.matched_lines.push((line.clone(), pattern_name.clone()));
-                        // TODO: Send desktop notification
+                        let _ = Notification::new()
+                            .summary(&format!("Log Scout Alert: {}", pattern_name))
+                            .body(&line)
+                            .icon("error")
+                            .timeout(5000) 
+                            .show();
                     }
                 }
                 
