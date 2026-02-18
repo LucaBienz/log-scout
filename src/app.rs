@@ -12,6 +12,7 @@ pub enum CurrentScreen {
     LogTrainer, 
     LiveMonitor,
     PatternBuilder,
+    PatternManager,
     Exiting,
 }
 
@@ -41,6 +42,9 @@ pub struct App {
     
     // Communication channel for live updates
     pub line_receiver: Option<mpsc::Receiver<String>>,
+
+    // Pattern manager
+    pub selected_pattern_index: usize,
 }
 
 impl App {
@@ -66,6 +70,8 @@ impl App {
             test_matches: Vec::new(),
             
             line_receiver: None,
+
+            selected_pattern_index: 0,
         };
         app.refresh_files();
         app.try_auto_start();
@@ -78,10 +84,8 @@ impl App {
                 let path = entry.path();
                 if path.extension().map_or(false, |ext| ext == "json") {
                     if let Ok(profile) = WatchProfile::load(path.to_str().unwrap_or_default()) {
+                        self.selected_log_path = Some(PathBuf::from(&profile.file_path));
                         self.watch_profile = Some(profile);
-                        if let Some(profile) = &self.watch_profile {
-                            self.selected_log_path = Some(PathBuf::from(&profile.file_path));
-                        }
                         self.compile_patterns();
                         self.start_live_monitoring();
                         return;
@@ -311,6 +315,37 @@ impl App {
                 }
             }
         }
+    }
+
+    pub fn next_pattern(&mut self) {
+        if let Some(profile) = &self.watch_profile {
+            if !profile.error_patterns.is_empty() && self.selected_pattern_index < profile.error_patterns.len() - 1 {
+                self.selected_pattern_index += 1;
+            }
+        }
+    }
+
+    pub fn previous_pattern(&mut self) {
+        if self.selected_pattern_index > 0 {
+            self.selected_pattern_index -= 1;
+        }
+    }
+
+    pub fn delete_selected_pattern(&mut self) {
+        if let Some(profile) = &mut self.watch_profile {
+            if !profile.error_patterns.is_empty() {
+
+                profile.error_patterns.remove(self.selected_pattern_index);
+                
+                let filename = format!("{}.json", profile.name);
+                let _ = profile.save(&filename);
+                
+                if self.selected_pattern_index >= profile.error_patterns.len() {
+                    self.selected_pattern_index = profile.error_patterns.len().saturating_sub(1);
+                }
+            }
+        }
+        self.compile_patterns();
     }
 
 }

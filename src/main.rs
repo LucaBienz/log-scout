@@ -142,6 +142,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         );
                     f.render_widget(test_list, pattern_chunks[2]);
                 }
+                CurrentScreen::PatternManager => {
+                    let patterns = if let Some(profile) = &app.watch_profile {
+                        profile.error_patterns.iter().map(|p| {
+                            // Split "Name:Regex" for nicer display
+                            let (name, regex) = p.split_once(':').unwrap_or(("Unknown", p));
+                            ListItem::new(format!("Name: {}  |  Re: / {} /", name, regex))
+                        }).collect()
+                    } else {
+                        vec![]
+                    };
+                    
+                    let list = List::new(patterns)
+                        .block(Block::default().borders(Borders::ALL).title(" Manage Patterns "))
+                        .highlight_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                        .highlight_symbol(">> "); // Indicates deletion
+                        
+                    let mut state = ListState::default();
+                    state.select(Some(app.selected_pattern_index));
+                    f.render_stateful_widget(list, chunks[0], &mut state);
+                }
                 CurrentScreen::Exiting => {}
             }
             
@@ -149,8 +169,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let footer_text = match app.current_screen {
                 CurrentScreen::FilePicker => "↑/↓ navigate, ENTER select, q quit",
                 CurrentScreen::LogTrainer => "↑/↓ navigate, ENTER create pattern, l live monitor, q back, ESC back",
-                CurrentScreen::LiveMonitor => "q back to file picker, ESC back",
+                CurrentScreen::LiveMonitor => "p manage patterns, q back to picker, ESC back",
                 CurrentScreen::PatternBuilder => "s save pattern, t test pattern, q back, ESC back",
+                CurrentScreen::PatternManager => "↑/↓ select, d delete pattern, q/ESC back",
                 CurrentScreen::Exiting => "",
             };
             let footer = Paragraph::new(footer_text)
@@ -193,6 +214,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     CurrentScreen::LiveMonitor => {
                         match key.code {
+                            KeyCode::Char('p') => {
+                                app.current_screen = CurrentScreen::PatternManager;
+                            },
                             KeyCode::Char('q') => {
                                 app.current_screen = CurrentScreen::FilePicker;
                             },
@@ -217,6 +241,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Esc => {
                                 app.current_screen = CurrentScreen::LogTrainer;
                             }
+                            _ => {}
+                        }
+                    }
+                    CurrentScreen::PatternManager => {
+                        match key.code {
+                            KeyCode::Up => app.previous_pattern(),
+                            KeyCode::Down => app.next_pattern(),
+                            KeyCode::Char('d') => app.delete_selected_pattern(),
+                            KeyCode::Char('q') | KeyCode::Esc => app.current_screen = CurrentScreen::LiveMonitor,
                             _ => {}
                         }
                     }
