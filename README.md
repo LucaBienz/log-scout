@@ -4,23 +4,23 @@ Tired of manually monitoring log files and missing critical errors? Log Scout is
 
 ## Why Log Scout?
 
-**Tired of missing production errors?** Log Scout monitors your files 24/7 and highlights matches in real-time.
+- **Tired of missing production errors?** Log Scout monitors your files 24/7 and highlights matches in real-time.
 
-**Tired of writing complex regex patterns?** Select any log line and Log Scout automatically generates the pattern for you.
+- **Tired of writing complex regex patterns?** Select any log line and Log Scout automatically generates the pattern for you.
 
-**Tired of checking multiple log files manually?** Browse files with an intuitive interface and switch between them instantly.
+- **Tired of checking multiple log files manually?** Browse files with an intuitive interface and switch between them instantly.
 
-**Tired of command-line tools that are hard to use?** Clean terminal interface with simple keyboard shortcuts.
+- **Tired of command-line tools that are hard to use?** Clean terminal interface with simple keyboard shortcuts.
 
 ## Features
 
-**File Browser** - Navigate and select log files with an intuitive TUI
-**Log Viewer** - View the last 1000 lines of any log file  
-**Real-time Monitoring** - Watch log files for new entries as they're written
-**Pattern Matching** - Create regex patterns to detect specific log events
-**Pattern Builder** - Generate patterns from example log lines automatically
-**Profile Management** - Save and load watch profiles with custom patterns
-**Match Highlighting** - Highlight lines that match your error patterns
+- **File Browser** - Navigate and select log files with an intuitive TUI
+- **Log Viewer** - View the last 1000 lines of any log file  
+- **Real-time Monitoring** - Watch log files for new entries as they're written
+- **Pattern Matching** - Create regex patterns to detect specific log events
+- **Pattern Builder** - Generate patterns from example log lines automatically
+- **Profile Management** - Save and load watch profiles with custom patterns
+- **Match Highlighting** - Highlight lines that match your error patterns
 
 ## Quick Start
 
@@ -117,7 +117,6 @@ Profiles are automatically saved as JSON files:
 ## Requirements
 
 - Rust 1.70+
-- Unix-like system (Linux, macOS)
 - Terminal with color support
 
 ## Future Enhancements
