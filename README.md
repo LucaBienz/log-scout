@@ -2,6 +2,14 @@
 
 Tired of manually monitoring log files and missing critical errors? Log Scout is a real-time log monitoring tool that watches your files and alerts you the moment something goes wrong.
 
+![Language](https://img.shields.io/badge/language-Rust-dca282.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-gray.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Version](https://img.shields.io/badge/version-0.5.0-success.svg)
+![GitHub last commit](https://img.shields.io/github/last-commit/LucaBienz/log-scout)
+![GitHub repo size](https://img.shields.io/github/repo-size/LucaBienz/log-scout)
+![GitHub stars](https://img.shields.io/github/stars/LucaBienz/log-scout?style=social)
+
 ## Why Log Scout?
 
 - **Tired of missing production errors?** Log Scout monitors your files 24/7 and highlights matches in real-time.
