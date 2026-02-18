@@ -8,7 +8,6 @@ Tired of manually monitoring log files and missing critical errors? Log Scout is
 ![Version](https://img.shields.io/badge/version-0.5.0-success.svg)
 ![GitHub last commit](https://img.shields.io/github/last-commit/LucaBienz/log-scout)
 ![GitHub repo size](https://img.shields.io/github/repo-size/LucaBienz/log-scout)
-![GitHub stars](https://img.shields.io/github/stars/LucaBienz/log-scout?style=social)
 
 ## Why Log Scout?
 
