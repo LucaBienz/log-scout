@@ -1,6 +1,7 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use crate::config::WatchProfile;
 use crate::pattern_builder::generate_regex_from_line;
 use regex::Regex;
@@ -31,7 +32,7 @@ pub struct App {
     pub selected_log_index: usize,
 
     // Live monitor state
-    pub live_lines: Vec<String>,
+    pub live_lines: VecDeque<String>,
     pub matched_lines: Vec<(String, String)>, // (line, pattern_name)
     pub watch_profile: Option<WatchProfile>,
     pub compiled_patterns: Vec<(String, Regex)>, // (name, regex)
@@ -61,7 +62,7 @@ impl App {
             log_lines: Vec::new(),
             selected_log_index: 0,
 
-            live_lines: Vec::new(),
+            live_lines: VecDeque::new(),
             matched_lines: Vec::new(),
             watch_profile: None,
             compiled_patterns: Vec::new(),
@@ -231,8 +232,8 @@ impl App {
     pub fn process_live_updates(&mut self) {
         if let Some(rx) = &self.line_receiver {
             while let Ok(line) = rx.try_recv() {
-                self.live_lines.push(line.clone());
-                
+                self.live_lines.push_back(line.clone());
+
                 // Check line against all compiled patterns
                 for (pattern_name, regex) in &self.compiled_patterns {
                     if regex.is_match(&line) {
@@ -241,14 +242,14 @@ impl App {
                             .summary(&format!("Log Scout Alert: {}", pattern_name))
                             .body(&line)
                             .icon("error")
-                            .timeout(5000) 
+                            .timeout(5000)
                             .show();
                     }
                 }
-                
+
                 // Keep only last 1000 lines for performance
                 if self.live_lines.len() > 1000 {
-                    self.live_lines.remove(0);
+                    self.live_lines.pop_front();
                 }
             }
         }
