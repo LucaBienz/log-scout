@@ -1,10 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PatternEntry {
+    pub name: String,
+    pub pattern: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WatchProfile {
     pub name: String,
     pub file_path: String,
-    pub error_patterns: Vec<String>, // The regex strings
+    pub error_patterns: Vec<PatternEntry>,
 }
 
 impl WatchProfile {

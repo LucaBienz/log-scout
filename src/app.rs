@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use crate::config::WatchProfile;
+use crate::config::{PatternEntry, WatchProfile};
 use crate::pattern_builder::generate_regex_from_line;
 use regex::Regex;
 use std::sync::mpsc;
@@ -297,8 +297,11 @@ impl App {
         }
 
         if let Some(profile) = &mut self.watch_profile {
-            profile.error_patterns.push(format!("{}:{}", self.pattern_name, self.current_pattern));
-        } 
+            profile.error_patterns.push(PatternEntry {
+                name: self.pattern_name.clone(),
+                pattern: self.current_pattern.clone(),
+            });
+        }
 
         self.compile_patterns();
         
@@ -314,11 +317,9 @@ impl App {
     pub fn compile_patterns(&mut self) {
         self.compiled_patterns.clear();
         if let Some(profile) = &self.watch_profile {
-            for pattern_str in &profile.error_patterns {
-                if let Some((name, pattern)) = pattern_str.split_once(':') {
-                    if let Ok(regex) = Regex::new(pattern) {
-                        self.compiled_patterns.push((name.to_string(), regex));
-                    }
+            for entry in &profile.error_patterns {
+                if let Ok(regex) = Regex::new(&entry.pattern) {
+                    self.compiled_patterns.push((entry.name.clone(), regex));
                 }
             }
         }

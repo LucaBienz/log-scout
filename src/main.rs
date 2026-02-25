@@ -144,10 +144,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 CurrentScreen::PatternManager => {
                     let patterns = if let Some(profile) = &app.watch_profile {
-                        profile.error_patterns.iter().map(|p| {
-                            // Split "Name:Regex" for nicer display
-                            let (name, regex) = p.split_once(':').unwrap_or(("Unknown", p));
-                            ListItem::new(format!("Name: {}  |  Re: / {} /", name, regex))
+                        profile.error_patterns.iter().map(|entry| {
+                            ListItem::new(format!("Name: {}  |  Re: / {} /", entry.name, entry.pattern))
                         }).collect()
                     } else {
                         vec![]
