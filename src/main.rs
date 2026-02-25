@@ -15,6 +15,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::io;
+use std::time::Duration;
 use app::{App, CurrentScreen};
 
 #[tokio::main]
@@ -30,6 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new();
 
     loop {
+        // Pull in new log lines before drawing so the UI always reflects the
+        // latest state, even when no key has been pressed.
+        app.process_live_updates();
+
         terminal.draw(|f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -73,9 +78,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     f.render_stateful_widget(log_list, chunks[0], &mut state);
                 }
                 CurrentScreen::LiveMonitor => {
-                    // Process any pending live updates
-                    app.process_live_updates();
-                    
                     // Split screen: live lines on top, matched patterns on bottom
                     let monitor_chunks = Layout::default()
                         .direction(Direction::Vertical)
@@ -179,7 +181,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         })?;
 
-        // Input Handling
+        // Input Handling — poll with a short timeout so the live monitor
+        // redraws at ~200 ms even when no key is pressed.
+        if !event::poll(Duration::from_millis(200))? {
+            continue;
+        }
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
                 match app.current_screen {
