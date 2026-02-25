@@ -161,7 +161,6 @@ Once the anchor is found, the prefix (timestamps, PIDs, brackets) is generalized
 
 ## Future Enhancements
 
-- Desktop notifications when patterns match
 - Multiple file monitoring simultaneously
 - Log filtering and search functionality
 - Pattern editing within the TUI
