@@ -71,19 +71,38 @@ Profiles are automatically saved as JSON files in the app directory.
 
 ## Pattern Generation
 
-Log Scout automatically converts example log lines into smart regex patterns:
+Select any log line in the viewer and Log Scout builds a regex that matches all similar lines — not just that one message.
+
+The generator looks for a **structural anchor** (the part that marks a line as an error) and makes everything after it generic:
 
 ```
 [2024-02-16 14:23:45] ERROR [1234] Connection failed
                 ↓
-\[\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\] ERROR \[\\d+\] Connection failed.*
+\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ERROR.*
 ```
 
-**What it does:**
-- Converts dates and times to generic patterns
-- Replaces process IDs and numbers with wildcard matches
-- Escapes special regex characters automatically
-- Adds wildcard matching for variable content
+### What it detects as an anchor
+
+| Format | Example | Detected anchor |
+|--------|---------|-----------------|
+| Common severity keywords (any case) | `ERROR`, `error`, `Warning`, `FATAL` | the keyword itself |
+| Extended keywords | `CRITICAL`, `SEVERE`, `PANIC`, `EXCEPTION`, `ALERT`, `TRACE`, `EMERG`, `FAILED`, `FAILURE` | the keyword itself |
+| Bracket-enclosed identifiers | `[FAIL]`, `[SEVERE]`, `[MY_LEVEL]` | the full `[…]` token |
+
+Once the anchor is found, the prefix (timestamps, PIDs, brackets) is generalized and the rest of the line is replaced with `.*`, so the pattern fires on **any** line at that level — not just the one you selected.
+
+### What it generalizes in the prefix
+
+- **Dates** `2024-02-16` → `\d{4}-\d{2}-\d{2}`
+- **Times** `14:23:45` → `\d{2}:\d{2}:\d{2}`
+- **Numbers / PIDs** `1234` → `\d+`
+- **Special characters** `[`, `]`, `.`, `(` etc. are escaped automatically
+
+### What it won't detect
+
+- **Free-form severity words** that don't match the keyword list and aren't bracketed — e.g. `severity=high` or `level: urgent`. The pattern will still be generated but will match that exact message rather than all lines of that type.
+- **Multi-line log entries** — only the selected line is used to build the pattern.
+- **Non-ASCII or emoji status indicators** — anchoring only works on ASCII word characters.
 
 
 
